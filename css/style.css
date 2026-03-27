@@ -50,19 +50,26 @@ body {
     min-height: 100vh;
 }
 
-/* Sidebar */
+/* Sidebar - Collapsible Drawer Style */
 .sidebar {
-    width: 70px; /* Reduced from 180px for a sleek mini-sidebar */
+    width: 280px;
     background-color: var(--sidebar-bg);
     border-right: 1px solid var(--border-color);
     padding: 1.5rem 0;
     display: flex;
     flex-direction: column;
     position: fixed;
+    left: -280px; /* Hidden by default */
     height: 100vh;
-    z-index: 100;
+    z-index: 1000;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.sidebar.open {
+    left: 0; /* Visible when open */
+    box-shadow: 10px 0 30px rgba(0,0,0,0.1);
+}
+
 
 .logo-area {
     display: flex;
@@ -114,8 +121,13 @@ body {
 }
 
 .logo-area h2 {
-    display: none; /* Hide title in mini-sidebar */
+    display: block; /* Show title in drawer */
+    font-family: 'Abhaya Libre', serif;
+    font-size: 1.2rem;
+    color: var(--text-main);
+    text-align: center;
 }
+
 
 .nav-links {
     list-style: none;
@@ -153,17 +165,21 @@ body {
 }
 
 .nav-links li span {
-    display: none; /* Hide text in desktop mini-sidebar */
+    display: block; /* Show text always in drawer */
+    margin-left: 1rem;
+    font-size: 1.1rem;
 }
 
-/* Main Content */
+
+/* Main Content - Full width since sidebar is hidden */
 .main-content {
     flex: 1;
-    margin-left: 70px; /* Adjusted for mini-sidebar */
+    margin-left: 0; 
     display: flex;
     flex-direction: column;
-    width: calc(100% - 70px);
+    width: 100%;
 }
+
 
 header {
     height: 70px;
@@ -681,13 +697,25 @@ textarea:focus {
 }
 
 .btn-menu-toggle {
-    display: none;
-    background: none;
-    border: none;
+    display: flex; /* Visible always */
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
     font-size: 1.5rem;
-    color: var(--text-muted);
+    color: var(--primary-color);
     cursor: pointer;
+    transition: all 0.2s;
 }
+
+.btn-menu-toggle:hover {
+    background: var(--sidebar-hover);
+    transform: scale(1.05);
+}
+
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
@@ -783,16 +811,16 @@ textarea:focus {
         display: grid;
     }
     
+    /* Sidebar logic is now global drawer style */
     .sidebar {
-        width: 0;
-        transform: translateX(-100%);
+        left: -280px;
     }
     
     .sidebar.open {
-        width: 220px; /* Slightly narrower sidebar on mobile */
-        transform: translateX(0);
-        box-shadow: 10px 0 30px rgba(0,0,0,0.2);
+        left: 0;
+        width: 280px;
     }
+
 
     .sidebar.open .logo-area h2 {
         display: block; /* Show title again in mobile sidebar */
@@ -804,12 +832,9 @@ textarea:focus {
     .sidebar.open .nav-links li {
         justify-content: flex-start;
         padding: 0.85rem 1.2rem;
-        gap: 1rem;
+        gap: 0.5rem;
     }
 
-    .sidebar.open .nav-links li span {
-        display: block; /* Show labels in mobile slide-out menu */
-    }
     
     .main-content {
         margin-left: 0;
@@ -817,8 +842,9 @@ textarea:focus {
     }
     
     .btn-menu-toggle {
-        display: block;
+        display: flex;
     }
+
 
     /* Make all sections visible one after another on mobile */
     .page-section {

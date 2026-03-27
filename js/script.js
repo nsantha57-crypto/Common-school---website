@@ -289,11 +289,10 @@ function initApp() {
             // Ensure access control is correct for the new section
             if (typeof applyAccessControl === 'function') applyAccessControl();
 
-            // Close sidebar on mobile after clicking
-            if (window.innerWidth <= 992) {
-                toggleSidebar();
-            }
+            // Close sidebar after clicking
+            toggleSidebar();
         };
+
     }
 
     // 3. Notices Section - Dropdown logic

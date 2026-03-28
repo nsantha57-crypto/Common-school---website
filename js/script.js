@@ -13,13 +13,26 @@ var currentUser = {
 
 function handleRoleChange() {
     var role = document.getElementById('login-role').value;
+    var extended = document.getElementById('extended-role-selection');
     var pinGroup = document.getElementById('login-pin-group');
     var classGroup = document.getElementById('login-class-group');
     
-    if (role === 'viewer') {
+    if (role === 'admin') {
+        extended.style.display = 'block';
+        handleSubRoleChange(); // Trigger sub-role logic
+    } else {
+        extended.style.display = 'none';
         pinGroup.style.display = 'none';
         classGroup.style.display = 'none';
-    } else if (role === 'class_teacher') {
+    }
+}
+
+function handleSubRoleChange() {
+    var subRole = document.getElementById('sub-role').value;
+    var pinGroup = document.getElementById('login-pin-group');
+    var classGroup = document.getElementById('login-class-group');
+    
+    if (subRole === 'class_teacher') {
         pinGroup.style.display = 'block';
         classGroup.style.display = 'block';
     } else {
@@ -29,23 +42,29 @@ function handleRoleChange() {
 }
 
 function processLogin() {
-    var role = document.getElementById('login-role').value;
+    var mainRole = document.getElementById('login-role').value;
+    var subRole = document.getElementById('sub-role').value;
     var pin = document.getElementById('login-pin').value;
     var assignedClass = document.getElementById('login-class').value;
     
-    if (role === 'admin' && (pin === 'admin123' || pin === '1234')) {
-        currentUser.role = 'admin';
-    } else if (role === 'principal' && (pin === 'prin123' || pin === '1234')) {
-        currentUser.role = 'principal';
-    } else if (role === 'flower_teacher' && (pin === 'flower123' || pin === '1234')) {
-        currentUser.role = 'flower_teacher';
-    } else if (role === 'class_teacher' && (pin === 'class123' || pin === '1234')) {
-        currentUser.role = 'class_teacher';
-        currentUser.assignedClass = assignedClass;
-    } else if (role === 'viewer') {
+    if (mainRole === 'viewer') {
         currentUser.role = 'viewer';
+    } else if (mainRole === 'admin') {
+        if (subRole === 'admin' && (pin === 'admin123' || pin === '1234')) {
+            currentUser.role = 'admin';
+        } else if (subRole === 'principal' && (pin === 'prin123' || pin === '1234')) {
+            currentUser.role = 'principal';
+        } else if (subRole === 'flower_teacher' && (pin === 'flower123' || pin === '1234')) {
+            currentUser.role = 'flower_teacher';
+        } else if (subRole === 'class_teacher' && (pin === 'class123' || pin === '1234')) {
+            currentUser.role = 'class_teacher';
+            currentUser.assignedClass = assignedClass;
+        } else {
+            alert("වැරදි මුරපදයක්! (Invalid PIN!)");
+            return;
+        }
     } else {
-        alert("වැරදි මුරපදයක්! (Invalid PIN!)");
+        alert("කරුණාකර ඔබ කවුරුන්දැයි තෝරන්න (Please select your role)");
         return;
     }
     
@@ -520,15 +539,49 @@ function initApp() {
     // 9. Initial filter run
     if (typeof filterStudentsByClass === 'function') filterStudentsByClass();
 
-    // 10. Service Worker Registration
+    // 10. Service Worker Registration & Update Detection
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js').then(function(registration) {
-                console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, function(err) {
+            navigator.serviceWorker.register('./sw.js').then(function(reg) {
+                console.log('ServiceWorker registration successful');
+                
+                // Track updates
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New update available!
+                            showUpdateNotification(reg);
+                        }
+                    });
+                });
+            }).catch(function(err) {
                 console.log('ServiceWorker registration failed: ', err);
             });
+
+            // Handle forced reload when new SW takes over
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    window.location.reload();
+                    refreshing = true;
+                }
+            });
         });
+    }
+
+    function showUpdateNotification(reg) {
+        const toast = document.getElementById('update-toast');
+        const updateBtn = document.getElementById('update-now-btn');
+        if (toast && updateBtn) {
+            toast.style.display = 'block';
+            updateBtn.onclick = () => {
+                if (reg.waiting) {
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+                toast.style.display = 'none';
+            };
+        }
     }
 
     // 11. Install Button Logic
@@ -1363,3 +1416,6 @@ function applyUnlockLevel(level) {
         }
     }
 }
+
+// Start the application
+window.onload = initApp;

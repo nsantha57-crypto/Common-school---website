@@ -5,6 +5,72 @@ var lastLoadedDates = {
 };
 var deferredPrompt;
 
+// ============================================================
+// Firebase Sync Helpers (Samagi Society eke wage - compat style)
+// ============================================================
+var _firebaseSyncTimeout = null;
+var _isLoadingFromFirebase = false;
+
+// Save data to Firebase (debounced - 1.5s after last change)
+function saveToFirebase(data) {
+    if (typeof db === 'undefined') return;
+    if (_firebaseSyncTimeout) clearTimeout(_firebaseSyncTimeout);
+    _firebaseSyncTimeout = setTimeout(function() {
+        // Gallery images too large for Firestore - save only to localStorage
+        var dataToSave = Object.assign({}, data);
+        delete dataToSave.gallery;
+
+        db.doc('schoolApp/mainData').set(dataToSave)
+            .then(function() { console.log('✅ Firebase sync OK'); })
+            .catch(function(err) { console.warn('Firebase write error:', err); });
+    }, 1500);
+}
+
+// Load data from Firebase once
+function loadFromFirebase(callback) {
+    if (typeof db === 'undefined') { if (callback) callback(null); return; }
+    db.doc('schoolApp/mainData').get()
+        .then(function(snap) {
+            if (snap.exists) { if (callback) callback(snap.data()); }
+            else { console.log('No Firebase data yet.'); if (callback) callback(null); }
+        })
+        .catch(function(err) { console.warn('Firebase read error:', err); if (callback) callback(null); });
+}
+
+// Real-time sync - listen for changes from other devices
+function setupFirebaseRealTimeSync() {
+    if (typeof db === 'undefined') return;
+    db.doc('schoolApp/mainData').onSnapshot(function(snap) {
+        if (snap.exists && !_isLoadingFromFirebase) {
+            var data = snap.data();
+            // Gallery kept only in localStorage
+            var raw = localStorage.getItem('schoolAppData');
+            if (raw) {
+                try { var ld = JSON.parse(raw); if (ld.gallery) data.gallery = ld.gallery; } catch(e) {}
+            }
+            try { localStorage.setItem('schoolAppData', JSON.stringify(data)); } catch(e) {}
+            showFirebaseSyncBadge();
+            console.log('🔄 Real-time update from Firebase');
+        }
+    });
+    console.log('🔴 Firebase real-time sync active');
+}
+
+function showFirebaseSyncBadge() {
+    var badge = document.getElementById('firebase-sync-badge');
+    if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'firebase-sync-badge';
+        badge.style.cssText = 'position:fixed; bottom:20px; left:20px; background:#10b981; color:white; padding:0.5rem 1rem; border-radius:8px; font-size:0.8rem; z-index:9998; box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+        document.body.appendChild(badge);
+    }
+    badge.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Cloud sync...';
+    badge.style.display = 'block';
+    clearTimeout(badge._hideTimeout);
+    badge._hideTimeout = setTimeout(function() { badge.style.display = 'none'; }, 2500);
+}
+
+
 // Authentication State
 var currentUser = {
     role: localStorage.getItem('userRole') || 'viewer', // 'viewer', 'class_teacher', 'flower_teacher', 'principal', 'admin'
@@ -763,6 +829,9 @@ function saveData() {
     } catch(e) {
         console.warn("Storage Full");
     }
+
+    // Also save to Firebase for cross-device sync
+    saveToFirebase(data);
 }
 
 function addGalleryPhoto(photoData, top = false) {
@@ -812,14 +881,28 @@ function getTableData(tableId) {
 
 // Function to load data from localStorage
 function loadData() {
-    var savedData = localStorage.getItem('schoolAppData');
-    if (!savedData) {
-        applyUnlockLevel(1); // Default
-        return;
-    }
-    
-    try {
-        var data = JSON.parse(savedData);
+    _isLoadingFromFirebase = true;
+
+    function applyData(data) {
+        _isLoadingFromFirebase = false;
+        if (!data) {
+            applyUnlockLevel(1);
+            return;
+        }
+
+        // Show Firebase sync badge
+        var badge = document.getElementById('firebase-sync-badge');
+        if (badge) { badge.innerHTML = '<i class="fas fa-check-circle"></i> Cloud data loaded!'; badge.style.display = 'block'; }
+        else {
+            var b = document.createElement('div');
+            b.id = 'firebase-sync-badge';
+            b.style.cssText = 'position:fixed; bottom:20px; left:20px; background:#10b981; color:white; padding:0.5rem 1rem; border-radius:8px; font-size:0.8rem; z-index:9998; box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+            b.innerHTML = '<i class="fas fa-check-circle"></i> Cloud data loaded!';
+            document.body.appendChild(b);
+            setTimeout(function() { b.style.display = 'none'; }, 2500);
+        }
+
+        try {
         
         // Restore Lesson Unlock Level
         if (data.lessons) {
@@ -899,11 +982,32 @@ function loadData() {
         lastLoadedDates['teachers-table'] = getElValue('teacher-attendance-date') || 'no-date';
         lastLoadedDates['prefects-table'] = getElValue('prefect-attendance-date') || 'no-date';
 
-        console.log("Data loaded from localStorage");
-    } catch (e) {
-        console.error("Error loading data", e);
+        console.log("Data loaded from Firebase/localStorage");
+        } catch (e) {
+            console.error("Error applying data", e);
+        }
     }
+
+    // Firebase compat style - same as Samagi Society page
+    loadFromFirebase(function(firebaseData) {
+        if (firebaseData) {
+            // Merge gallery from localStorage (gallery not in Firebase)
+            var rawL = localStorage.getItem('schoolAppData');
+            if (rawL) {
+                try { var ld = JSON.parse(rawL); if (ld.gallery) firebaseData.gallery = ld.gallery; } catch(e) {}
+            }
+            try { localStorage.setItem('schoolAppData', JSON.stringify(firebaseData)); } catch(e) {}
+            applyData(firebaseData);
+        } else {
+            // Fallback to localStorage
+            var rawL = localStorage.getItem('schoolAppData');
+            applyData(rawL ? JSON.parse(rawL) : null);
+        }
+        // Start real-time sync
+        setupFirebaseRealTimeSync();
+    });
 }
+
 
 function restoreRegistryTable(tableId, regData, dailyRecords) {
     if (!regData || regData.length === 0) return;
